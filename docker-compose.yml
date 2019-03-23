@@ -1,12 +1,22 @@
+# NOTE(jlvillal): This docker-compose.yml file has been modified to work on a
+# Synology NAS. The following was changed:
+#   * Don't use named volumes, but use bind mount instead
+#   * Explicitly turn on RUNAS_UID0="true" as couldn't get it to work when set to "false"
+#   * Don't expose port 8443 as we will be using Synology's
+#         Control Panel->Application Portal->Reverse Proxy with an SSL certificate from
+#          LetsEncrypt.
+#          Install the Certificate in Control Panel-> Security -> Certificate
+#   * Change "restart" to "unless-stopped" from "always"
+#
 version: '2.2'
 services:
   mongo:
     image: mongo:3.4
     networks:
       - unifi
-    restart: always
+    restart: unless-stopped
     volumes:
-      - db:/data/db
+      - /volume1/docker/unifi/db:/data/db
   controller:
     image: "jacobalberty/unifi:${TAG:-latest}"
     depends_on:
@@ -14,39 +24,42 @@ services:
     init: true
     networks:
       - unifi
-    restart: always
+    restart: unless-stopped
     volumes:
-      - data:/unifi/data
-      - log:/unifi/log
-      - cert:/unifi/cert
-      - init:/unifi/init.d
+      - /volume1/docker/unifi/cert:/unifi/cert
+      - /volume1/docker/unifi/data:/unifi/data
+      - /volume1/docker/unifi/init:/unifi/init.d
+      - /volume1/docker/unifi/log:/unifi/log
     environment:
       DB_URI: mongodb://mongo/unifi
       STATDB_URI: mongodb://mongo/unifi_stat
       DB_NAME: unifi
+      RUNAS_UID0: "true"
     ports:
-      - "3478:3478/udp" # STUN
-      - "6789:6789/tcp" # Speed test
-      - "8080:8080/tcp" # Device/ controller comm.
-      - "8443:8443/tcp" # Controller GUI/API as seen in a web browser
-      - "8880:8880/tcp" # HTTP portal redirection
-      - "8843:8843/tcp" # HTTPS portal redirection
-      - "10001:10001/udp" # AP discovery
+      - "3478:3478/udp"             # STUN
+      - "6789:6789/tcp"             # Speed test
+      - "8080:8080/tcp"             # Device/ controller comm.
+      - "127.0.0.1:8443:8443/tcp"   # Controller GUI/API as seen in a web browser
+      - "8880:8880/tcp"             # HTTP portal redirection
+      - "8843:8843/tcp"             # HTTPS portal redirection
+      - "10001:10001/udp"           # AP discovery
+
   logs:
     image: bash
     depends_on:
       - controller
     command: bash -c 'tail -f /unifi/log/*.log'
-    restart: always
+    restart: unless-stopped
     volumes:
-      - log:/unifi/log
+      - /volume1/docker/unifi/log:/unifi/log
 
-volumes:
-  db:
-  data:
-  log:
-  cert:
-  init:
+# NOTE(jlvillal): Don't use named volumes
+# volumes:
+#   db:
+#   data:
+#   log:
+#   cert:
+#   init:
 
 networks:
   unifi:
